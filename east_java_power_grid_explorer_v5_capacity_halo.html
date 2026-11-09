@@ -1,0 +1,1644 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>East Java Power Grid - Capacity Halo Map</title>
+
+<!-- Leaflet online -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<style>
+:root{
+  --bg:#071018;
+  --panel:#0d1823;
+  --panel2:#111f2c;
+  --border:#223244;
+  --text:#eef5fb;
+  --muted:#8fa2b5;
+
+  /* sumber energi: kategorikal netral */
+  --coal:#d9902f;
+  --gas:#4f8df7;
+  --hydro:#20b7c9;
+
+  /* status operasional: semantik */
+  --normal:#24b7a5;
+  --caution:#f0b13c;
+  --danger:#ef5a5a;
+  --critical:#d83f7d;
+
+  --accent:#59c8ff;
+}
+
+*{box-sizing:border-box}
+
+html,body{
+  margin:0;
+  min-height:100%;
+  background:var(--bg);
+  color:var(--text);
+  font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+}
+
+button,input{font:inherit}
+
+/* penting supaya Leaflet tile tidak rusak/menumpuk */
+.leaflet-container img{
+  max-width:none !important;
+}
+
+.app{
+  max-width:1500px;
+  margin:auto;
+  padding:16px;
+}
+
+.topbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  margin-bottom:12px;
+}
+
+.brand{
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+
+.logo{
+  width:42px;
+  height:42px;
+  border-radius:13px;
+  display:grid;
+  place-items:center;
+  background:linear-gradient(145deg,#10283b,#0c1d2b);
+  border:1px solid #27435a;
+  color:var(--accent);
+  font-weight:900;
+  font-size:19px;
+}
+
+.title-group h1{
+  margin:0;
+  font-size:22px;
+  letter-spacing:-.4px;
+}
+
+.title-group div{
+  color:var(--muted);
+  font-size:12px;
+  margin-top:3px;
+}
+
+.status-top{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:8px 11px;
+  border:1px solid #284258;
+  border-radius:999px;
+  background:#0c1b27;
+  color:#b8d8ea;
+  font-size:12px;
+  font-weight:800;
+}
+
+.status-dot{
+  width:8px;
+  height:8px;
+  border-radius:50%;
+  background:var(--normal);
+  box-shadow:0 0 10px rgba(36,183,165,.7);
+}
+
+.main-grid{
+  display:grid;
+  grid-template-columns:minmax(0,1.75fr) minmax(340px,.75fr);
+  gap:12px;
+}
+
+.map-panel,
+.card{
+  border:1px solid var(--border);
+  background:var(--panel);
+  border-radius:18px;
+}
+
+.map-panel{
+  position:relative;
+  overflow:hidden;
+  min-height:760px;
+}
+
+#map{
+  width:100%;
+  height:760px;
+  background:#09131c;
+}
+
+.map-toolbar{
+  position:absolute;
+  z-index:900;
+  left:14px;
+  top:14px;
+  display:flex;
+  gap:7px;
+  flex-wrap:wrap;
+}
+
+.map-chip{
+  border:1px solid rgba(255,255,255,.13);
+  background:rgba(7,16,24,.90);
+  color:#d9e6ef;
+  padding:8px 10px;
+  border-radius:10px;
+  font-size:11px;
+  font-weight:800;
+  backdrop-filter:blur(10px);
+}
+
+.map-chip strong{
+  color:#fff;
+}
+
+.sidebar{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  min-width:0;
+}
+
+.card{
+  padding:16px;
+}
+
+.card-title{
+  font-size:11px;
+  font-weight:850;
+  letter-spacing:.09em;
+  text-transform:uppercase;
+  color:#8ca2b6;
+  margin-bottom:12px;
+}
+
+.filters{
+  display:flex;
+  flex-wrap:wrap;
+  gap:7px;
+}
+
+.filter-btn{
+  border:1px solid #29394b;
+  background:#0a141e;
+  color:#9fb2c4;
+  border-radius:10px;
+  padding:8px 10px;
+  cursor:pointer;
+  font-size:12px;
+  font-weight:800;
+}
+
+.filter-btn.active{
+  color:#fff;
+  background:#152536;
+}
+
+.plant-name{
+  font-size:24px;
+  font-weight:900;
+  line-height:1.12;
+  margin-bottom:3px;
+}
+
+.plant-location{
+  color:var(--muted);
+  font-size:12px;
+  margin-bottom:12px;
+}
+
+.type-line{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  margin-bottom:14px;
+  font-size:12px;
+}
+
+.type-dot{
+  width:10px;
+  height:10px;
+  border-radius:50%;
+}
+
+.metric-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+  margin-bottom:10px;
+}
+
+.metric{
+  min-width:0;
+  padding:10px;
+  border-radius:12px;
+  background:#09141e;
+  border:1px solid #1d2d3c;
+}
+
+.metric-label{
+  font-size:9px;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:#6f8497;
+  font-weight:850;
+}
+
+.metric-value{
+  margin-top:4px;
+  font-size:17px;
+  font-weight:900;
+  word-break:break-word;
+}
+
+.metric-sub{
+  font-size:10px;
+  color:#7890a4;
+  margin-top:3px;
+}
+
+.network{
+  padding:11px 12px;
+  border-left:3px solid var(--accent);
+  background:#091620;
+  border-radius:8px;
+  font-size:11px;
+  line-height:1.5;
+  color:#bbcfdd;
+}
+
+.note{
+  margin-top:9px;
+  font-size:10px;
+  color:#72879a;
+  line-height:1.45;
+}
+
+.legend{
+  display:grid;
+  gap:8px;
+  font-size:11px;
+  color:#a9bac8;
+}
+
+.legend-row{
+  display:flex;
+  align-items:center;
+  gap:8px;
+}
+
+.legend-dot{
+  width:10px;
+  height:10px;
+  border-radius:50%;
+}
+
+.status-row{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  margin-bottom:11px;
+}
+
+.status-pill{
+  min-width:90px;
+  text-align:center;
+  padding:8px 10px;
+  border-radius:999px;
+  font-size:11px;
+  font-weight:900;
+}
+
+.reserve-big{
+  font-size:26px;
+  font-weight:900;
+}
+
+.reserve-sub{
+  font-size:10px;
+  color:#8497aa;
+}
+
+.bar{
+  height:10px;
+  border-radius:999px;
+  background:#071018;
+  border:1px solid #203144;
+  overflow:hidden;
+  margin:8px 0 12px;
+}
+
+.bar-fill{
+  height:100%;
+  border-radius:999px;
+}
+
+.slider-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+
+.slider-box{
+  background:#09141e;
+  border:1px solid #1d2d3c;
+  border-radius:11px;
+  padding:9px;
+}
+
+.slider-box label{
+  display:flex;
+  justify-content:space-between;
+  gap:8px;
+  color:#a8b8c6;
+  font-size:10px;
+  font-weight:800;
+  margin-bottom:6px;
+}
+
+input[type=range]{
+  width:100%;
+  accent-color:var(--accent);
+}
+
+.marker-wrap{
+  display:grid;
+  place-items:center;
+}
+
+.marker-core{
+  width:24px;
+  height:24px;
+  border-radius:50%;
+  display:grid;
+  place-items:center;
+  color:#061019;
+  border:2px solid rgba(255,255,255,.96);
+  font-size:9px;
+  font-weight:950;
+  box-shadow:0 5px 15px rgba(0,0,0,.42);
+  transition:transform .15s ease, filter .15s ease;
+}
+
+.marker-core:hover{
+  transform:scale(1.10);
+  filter:brightness(1.12);
+}
+
+.marker-core.approx{
+  border-style:dashed;
+}
+
+.capacity-halo{
+  pointer-events:auto;
+}
+
+.capacity-legend{
+  position:absolute;
+  z-index:900;
+  left:14px;
+  bottom:26px;
+  min-width:150px;
+  padding:10px 12px;
+  border-radius:12px;
+  background:rgba(7,16,24,.92);
+  border:1px solid rgba(255,255,255,.13);
+  backdrop-filter:blur(10px);
+  color:#cbd8e4;
+  font-size:10px;
+}
+
+.capacity-legend-title{
+  font-size:10px;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+  color:#8fa5b8;
+  font-weight:850;
+  margin-bottom:8px;
+}
+
+.capacity-scale{
+  display:flex;
+  align-items:flex-end;
+  gap:12px;
+  min-height:66px;
+}
+
+.capacity-item{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:flex-end;
+  gap:4px;
+  min-width:35px;
+}
+
+.capacity-circle{
+  border-radius:50%;
+  border:2px solid #dce8f2;
+  background:rgba(89,200,255,.12);
+}
+
+.capacity-label{
+  color:#b6c8d7;
+  font-size:9px;
+  white-space:nowrap;
+}
+
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip{
+  background:#0d1924;
+  color:#dbe7f2;
+  border:1px solid #2d4052;
+}
+
+.leaflet-popup-content{
+  font-size:11px;
+  line-height:1.45;
+}
+
+.popup-name{
+  color:#fff;
+  font-size:14px;
+  font-weight:900;
+}
+
+.popup-loc{
+  color:#8ea2b4;
+  margin-top:2px;
+}
+
+.leaflet-control-zoom a{
+  background:#0d1924 !important;
+  color:#e8f2fa !important;
+  border-color:#2a3e50 !important;
+}
+
+.leaflet-control-attribution{
+  background:rgba(7,16,24,.75) !important;
+  color:#6f8293 !important;
+}
+
+.leaflet-control-attribution a{
+  color:#87bad8 !important;
+}
+
+
+.service-area-list{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+}
+
+.area-tag{
+  padding:6px 8px;
+  border-radius:999px;
+  background:#0a1a25;
+  border:1px solid #31506a;
+  color:#bfe7fb;
+  font-size:10px;
+  font-weight:800;
+}
+
+.area-caption{
+  margin-top:9px;
+  color:#75899c;
+  font-size:10px;
+  line-height:1.45;
+}
+
+.map-area-legend{
+  display:none;
+  align-items:center;
+  gap:7px;
+}
+
+.map-area-legend.show{
+  display:flex;
+}
+
+.area-swatch{
+  width:14px;
+  height:14px;
+  border-radius:4px;
+  background:rgba(89,200,255,.22);
+  border:2px solid #59c8ff;
+}
+
+@media(max-width:1000px){
+  .main-grid{
+    grid-template-columns:1fr;
+  }
+
+  #map{
+    height:620px;
+  }
+
+  .map-panel{
+    min-height:620px;
+  }
+}
+
+@media(max-width:620px){
+  .app{padding:9px}
+  .topbar{align-items:flex-start}
+  .status-top{display:none}
+  #map{height:540px}
+  .map-panel{min-height:540px}
+  .metric-grid,.slider-grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+
+<body>
+<div class="app">
+
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">⚡</div>
+      <div class="title-group">
+        <h1>East Java Power Grid</h1>
+        <div>Generation capacity & system area monitor</div>
+      </div>
+    </div>
+
+    <div class="status-top">
+      <span class="status-dot"></span>
+      SYSTEM ONLINE
+    </div>
+  </header>
+
+  <main class="main-grid">
+
+    <section class="map-panel">
+      <div id="map"></div>
+
+      <div class="map-toolbar">
+        <div class="map-chip"><strong id="plantCount">7</strong> pembangkit</div>
+        <div class="map-chip">Jawa Timur</div>
+        <div class="map-chip map-area-legend" id="areaLegend">
+          <span class="area-swatch"></span>
+          Area sistem terkait
+        </div>
+      </div>
+
+      <div class="capacity-legend">
+        <div class="capacity-legend-title">Radius transparan = Kapasitas</div>
+        <div class="capacity-scale">
+          <div class="capacity-item">
+            <span class="capacity-circle" style="width:20px;height:20px"></span>
+            <span class="capacity-label">500 MW</span>
+          </div>
+          <div class="capacity-item">
+            <span class="capacity-circle" style="width:29px;height:29px"></span>
+            <span class="capacity-label">1.000 MW</span>
+          </div>
+          <div class="capacity-item">
+            <span class="capacity-circle" style="width:41px;height:41px"></span>
+            <span class="capacity-label">2.000 MW</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="sidebar">
+
+      <section class="card">
+        <div class="card-title">Filter sumber</div>
+        <div class="filters" id="filters"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-title">Pembangkit terpilih</div>
+
+        <div class="plant-name" id="plantName">UP Paiton</div>
+        <div class="plant-location" id="plantLocation">Paiton, Kabupaten Probolinggo</div>
+
+        <div class="type-line">
+          <span class="type-dot" id="plantTypeDot"></span>
+          <span id="plantType">Batubara</span>
+        </div>
+
+        <div class="metric-grid">
+
+          <div class="metric">
+            <div class="metric-label">Kapasitas</div>
+            <div class="metric-value" id="capacity">1.460 MW</div>
+            <div class="metric-sub">terpasang • radius transparan mengikuti nilai ini</div>
+          </div>
+
+          <div class="metric">
+            <div class="metric-label">Produksi</div>
+            <div class="metric-value" id="production">7.741,21 GWh</div>
+            <div class="metric-sub" id="productionYear">2024</div>
+          </div>
+
+          <div class="metric">
+            <div class="metric-label">Utilisasi</div>
+            <div class="metric-value" id="utilization">60,5%</div>
+            <div class="metric-sub">capacity factor</div>
+          </div>
+
+          <div class="metric">
+            <div class="metric-label">Operator</div>
+            <div class="metric-value" id="operator" style="font-size:13px">PLN Nusantara Power</div>
+            <div class="metric-sub">unit publik</div>
+          </div>
+
+        </div>
+
+        <div class="network" id="network"></div>
+        <div class="note" id="plantNote"></div>
+      </section>
+
+      <section class="card">
+        <div class="card-title">Area sistem terkait</div>
+        <div class="service-area-list" id="serviceAreaList">
+          <span class="area-tag">Memuat batas wilayah…</span>
+        </div>
+        <div class="area-caption" id="serviceAreaCaption">
+          Area terkait jaringan, bukan berarti tiap kabupaten menerima listrik secara eksklusif dari satu pembangkit.
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-title">Encoding visual</div>
+        <div class="legend">
+          <div class="legend-row"><span class="legend-dot" style="background:var(--coal)"></span> Batubara</div>
+          <div class="legend-row"><span class="legend-dot" style="background:var(--gas)"></span> Gas / HSD</div>
+          <div class="legend-row"><span class="legend-dot" style="background:var(--hydro)"></span> Hidro</div>
+          <div class="legend-row">◉ Titik pusat = lokasi pembangkit</div>
+          <div class="legend-row">◯ Radius transparan = kapasitas terpasang (MW)</div>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="card-title">System reserve</div>
+
+        <div class="status-row">
+          <div class="status-pill" id="statusPill">NORMAL</div>
+          <div>
+            <div class="reserve-big" id="reserveText">128,3%</div>
+            <div class="reserve-sub">reserve margin</div>
+          </div>
+        </div>
+
+        <div class="bar"><div class="bar-fill" id="reserveBar"></div></div>
+
+        <div class="slider-grid">
+
+          <div class="slider-box">
+            <label>
+              <span>Daya mampu</span>
+              <strong id="availableLabel">10,5 GW</strong>
+            </label>
+            <input id="available" type="range" min="3" max="12" step="0.1" value="10.5">
+          </div>
+
+          <div class="slider-box">
+            <label>
+              <span>Beban</span>
+              <strong id="loadLabel">4,6 GW</strong>
+            </label>
+            <input id="load" type="range" min="2" max="11" step="0.1" value="4.6">
+          </div>
+
+        </div>
+      </section>
+
+    </aside>
+
+  </main>
+</div>
+
+<script>
+const plants = [
+  {
+    id:"paiton",
+    name:"UP Paiton",
+    location:"Paiton, Kabupaten Probolinggo",
+    lat:-7.7154,
+    lng:113.5846,
+    source:"Batubara",
+    sourceKey:"coal",
+    marker:"C",
+    capacity:1460,
+    production:7741.21,
+    productionYear:2024,
+    operator:"PLN Nusantara Power",
+    network:"Subsistem Paiton • Sistem Jawa–Madura–Bali",
+    note:"Kapasitas merujuk unit PLN Nusantara Power, bukan seluruh kompleks Paiton."
+  },
+
+  {
+    id:"gresik",
+    name:"UP Gresik",
+    location:"Kabupaten Gresik",
+    lat:-7.1633,
+    lng:112.6615,
+    source:"Gas / BBM",
+    sourceKey:"gas",
+    marker:"G",
+    capacity:2218.98,
+    production:7175.74,
+    productionYear:2024,
+    operator:"PLN Nusantara Power",
+    network:"Area Krian–Gresik • Sistem Jawa–Madura–Bali",
+    note:"Pembangkit terhubung ke sistem interkoneksi, bukan hanya beban lokal."
+  },
+
+  {
+    id:"grati",
+    name:"PLTGU Grati",
+    location:"Lekok, Kabupaten Pasuruan",
+    lat:-7.64854,
+    lng:113.02473,
+    source:"Gas / HSD",
+    sourceKey:"gas",
+    marker:"G",
+    capacity:1060.11,
+    production:null,
+    productionYear:null,
+    operator:"PLN Indonesia Power",
+    network:"500 kV & 150 kV • Sistem Jawa–Bali",
+    note:"Produksi individual tidak tersedia pada dataset yang digunakan."
+  },
+
+  {
+    id:"tanjung",
+    name:"PLTU Tanjung Awar-Awar",
+    location:"Jenu, Kabupaten Tuban",
+    lat:-6.81003,
+    lng:111.99617,
+    source:"Batubara",
+    sourceKey:"coal",
+    marker:"C",
+    capacity:700,
+    production:4533.29,
+    productionYear:2024,
+    operator:"PLN Nusantara Power",
+    network:"150 kV • Sistem Jawa–Madura–Bali",
+    note:"Konfigurasi umum 2 × 350 MW."
+  },
+
+  {
+    id:"pacitan",
+    name:"PLTU Pacitan",
+    location:"Sudimoro, Kabupaten Pacitan",
+    lat:-8.26009,
+    lng:111.37414,
+    source:"Batubara",
+    sourceKey:"coal",
+    marker:"C",
+    capacity:630,
+    production:4078.06,
+    productionYear:2024,
+    operator:"PLN Nusantara Power",
+    network:"Sistem Jawa–Madura–Bali",
+    note:"Konfigurasi umum 2 × 315 MW."
+  },
+
+  {
+    id:"sutami",
+    name:"PLTA Sutami",
+    location:"Karangkates, Kabupaten Malang",
+    lat:-8.16136,
+    lng:112.44418,
+    source:"Air",
+    sourceKey:"hydro",
+    marker:"H",
+    capacity:105,
+    production:null,
+    productionYear:null,
+    operator:"PLN Nusantara Power / UP Brantas",
+    network:"Sistem Brantas • Jawa Timur",
+    note:"Produksi publik tersedia pada level UP Brantas, bukan individual Sutami."
+  },
+
+  {
+    id:"bawean",
+    name:"PLTMG Bawean",
+    location:"Pulau Bawean, Kabupaten Gresik",
+    lat:-5.8501,
+    lng:112.6602,
+    source:"Gas CNG",
+    sourceKey:"gas",
+    marker:"G",
+    capacity:3,
+    production:19.48,
+    productionYear:2024,
+    operator:"PLN Nusantara Power",
+    network:"Sistem isolated Pulau Bawean",
+    note:"Posisi marker merupakan perkiraan area Sangkapura.",
+    approximate:true
+  }
+];
+
+/*
+  Area sistem terkait.
+  Mapping Paiton memakai referensi historis RUPTL PLN 2016–2025:
+  Banyuwangi, Jember, Jombang, Situbondo, Bondowoso.
+  Ini bukan klaim suplai eksklusif dan bukan telemetry realtime.
+*/
+const serviceAreasByPlant = {
+  paiton: [
+    "Banyuwangi",
+    "Jember",
+    "Jombang",
+    "Situbondo",
+    "Bondowoso"
+  ]
+};
+
+const REGENCY_GEOJSON_URL =
+  "https://cdn.jsdelivr.net/gh/fajriyan/open-data@main/data-nasional/wilayah/geospasial/geojson/regency.json";
+
+let regencyFeatures = [];
+let regencyLoadPromise = null;
+
+const rootStyle = getComputedStyle(document.documentElement);
+
+const colors = {
+  coal:rootStyle.getPropertyValue("--coal").trim(),
+  gas:rootStyle.getPropertyValue("--gas").trim(),
+  hydro:rootStyle.getPropertyValue("--hydro").trim()
+};
+
+/* =========================================================
+   MAP
+   fokus Jawa Timur
+========================================================= */
+
+const eastJavaBounds = L.latLngBounds(
+  [-8.95, 110.65],
+  [-5.45, 114.75]
+);
+
+const map = L.map("map", {
+  zoomControl:true,
+  minZoom:7,
+  maxZoom:14,
+  maxBounds:eastJavaBounds.pad(0.15),
+  maxBoundsViscosity:0.9
+});
+
+map.fitBounds(eastJavaBounds, {
+  padding:[20,20]
+});
+
+L.tileLayer(
+  "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+  {
+    maxZoom:19,
+    attribution:"© OpenStreetMap"
+  }
+).addTo(map);
+
+/* invalidate size menghindari tile terpotong/absurd */
+setTimeout(() => {
+  map.invalidateSize();
+  map.fitBounds(eastJavaBounds, {
+    padding:[20,20]
+  });
+}, 200);
+
+window.addEventListener("resize", () => {
+  map.invalidateSize();
+});
+
+/* Halo kapasitas berada di bawah marker utama */
+const capacityHaloLayer = L.layerGroup().addTo(map);
+const markerLayer = L.layerGroup().addTo(map);
+
+/* Polygon area terkait diletakkan di bawah marker */
+map.createPane("serviceAreas");
+map.getPane("serviceAreas").style.zIndex = 350;
+
+map.createPane("capacityHalos");
+map.getPane("capacityHalos").style.zIndex = 410;
+
+const serviceAreaLayer = L.layerGroup().addTo(map);
+
+function normalizeAreaName(value){
+  return String(value ?? "")
+    .toUpperCase()
+    .replace(/^KABUPATEN\s+/,"")
+    .replace(/^KAB\.\s*/,"")
+    .replace(/^KOTA\s+/,"")
+    .replace(/[^A-Z0-9]+/g," ")
+    .trim();
+}
+
+function featureMatchesArea(feature, target){
+  const wanted = normalizeAreaName(target);
+  const props = feature && feature.properties ? feature.properties : {};
+
+  return Object.values(props).some(value => {
+    if(typeof value !== "string") return false;
+    const normalized = normalizeAreaName(value);
+    return normalized === wanted ||
+           normalized.endsWith(" " + wanted) ||
+           normalized.includes(wanted);
+  });
+}
+
+async function ensureRegencyData(){
+  if(regencyFeatures.length) return regencyFeatures;
+  if(regencyLoadPromise) return regencyLoadPromise;
+
+  regencyLoadPromise = fetch(REGENCY_GEOJSON_URL)
+    .then(response => {
+      if(!response.ok){
+        throw new Error("HTTP " + response.status);
+      }
+      return response.json();
+    })
+    .then(data => {
+      regencyFeatures = Array.isArray(data.features) ? data.features : [];
+      return regencyFeatures;
+    })
+    .catch(error => {
+      console.error("Gagal memuat GeoJSON kabupaten:", error);
+      regencyFeatures = [];
+      return [];
+    });
+
+  return regencyLoadPromise;
+}
+
+function updateAreaTags(names, message){
+  const list = document.getElementById("serviceAreaList");
+  const caption = document.getElementById("serviceAreaCaption");
+
+  list.innerHTML = "";
+
+  if(names.length){
+    names.forEach(name => {
+      const tag = document.createElement("span");
+      tag.className = "area-tag";
+      tag.textContent = name;
+      list.appendChild(tag);
+    });
+  }else{
+    const tag = document.createElement("span");
+    tag.className = "area-tag";
+    tag.textContent = message || "Belum dipetakan";
+    list.appendChild(tag);
+  }
+
+  caption.textContent =
+    "Area terkait jaringan/subsistem, bukan suplai eksklusif satu pembangkit.";
+}
+
+async function highlightServiceAreas(plant){
+  serviceAreaLayer.clearLayers();
+
+  const legend = document.getElementById("areaLegend");
+  const areas = serviceAreasByPlant[plant.id] || [];
+
+  if(!areas.length){
+    legend.classList.remove("show");
+    updateAreaTags([], "Belum dipetakan");
+    return;
+  }
+
+  updateAreaTags(areas);
+  legend.classList.add("show");
+
+  const features = await ensureRegencyData();
+
+  if(!features.length){
+    updateAreaTags(areas);
+    document.getElementById("serviceAreaCaption").textContent =
+      "Nama area tersedia, tetapi batas GeoJSON gagal dimuat dari sumber eksternal.";
+    return;
+  }
+
+  const matched = [];
+  const missing = [];
+
+  areas.forEach(name => {
+    const feature = features.find(f => featureMatchesArea(f, name));
+
+    if(feature){
+      matched.push(feature);
+
+      L.geoJSON(feature, {
+        pane:"serviceAreas",
+        style:{
+          color:"#59c8ff",
+          weight:2.2,
+          opacity:0.95,
+          fillColor:"#59c8ff",
+          fillOpacity:0.20
+        },
+        onEachFeature:(_, layer) => {
+          layer.bindTooltip(
+            name + " • area sistem terkait",
+            {
+              sticky:true,
+              direction:"center",
+              className:"marker-label"
+            }
+          );
+        }
+      }).addTo(serviceAreaLayer);
+    }else{
+      missing.push(name);
+    }
+  });
+
+  if(matched.length){
+    const bounds = serviceAreaLayer.getBounds();
+    if(bounds.isValid()){
+      map.fitBounds(bounds, {
+        padding:[45,45],
+        maxZoom:9
+      });
+    }
+  }
+
+  if(missing.length){
+    document.getElementById("serviceAreaCaption").textContent =
+      "Area terkait jaringan; batas belum ditemukan untuk: " +
+      missing.join(", ") +
+      ".";
+  }
+}
+
+const activeKeys = new Set([
+  "coal",
+  "gas",
+  "hydro"
+]);
+
+const markerMap = new Map();
+
+/*
+  Proportional Capacity Halo
+  --------------------------
+  Marker pusat selalu berukuran tetap.
+  Kapasitas direpresentasikan oleh lingkaran transparan di belakang marker.
+
+  Karena yang dibaca pengguna adalah LUAS lingkaran, radius menggunakan
+  akar kuadrat kapasitas agar area visual tetap proporsional terhadap MW.
+*/
+const MAX_CAPACITY = Math.max(...plants.map(p => p.capacity));
+const MAX_HALO_RADIUS_PX = 58;
+const MIN_HALO_RADIUS_PX = 9;
+
+function haloRadiusFromCapacity(capacity){
+  const scaled = Math.sqrt(capacity / MAX_CAPACITY) * MAX_HALO_RADIUS_PX;
+  return Math.max(MIN_HALO_RADIUS_PX, scaled);
+}
+
+function iconFor(p){
+  const color = colors[p.sourceKey];
+
+  return L.divIcon({
+    className:"",
+    html:`
+      <div class="marker-wrap">
+        <div
+          class="marker-core ${p.approximate ? "approx" : ""}"
+          style="background:${color}">
+          ${p.marker}
+        </div>
+      </div>
+    `,
+    iconSize:[24,24],
+    iconAnchor:[12,12],
+    popupAnchor:[0,-14]
+  });
+}
+
+function formatMW(value){
+
+  return new Intl.NumberFormat(
+    "id-ID",
+    {
+      maximumFractionDigits:2
+    }
+  ).format(value) + " MW";
+}
+
+function formatGWh(value){
+
+  return new Intl.NumberFormat(
+    "id-ID",
+    {
+      maximumFractionDigits:2
+    }
+  ).format(value) + " GWh";
+}
+
+function capacityFactor(p){
+
+  if(
+    p.production == null ||
+    !p.capacity
+  ){
+    return null;
+  }
+
+  return (
+    p.production /
+    (
+      p.capacity *
+      8.76
+    )
+  ) * 100;
+}
+
+function popupHTML(p){
+
+  return `
+    <div class="popup-name">${p.name}</div>
+    <div class="popup-loc">${p.location}</div>
+
+    <div style="margin-top:7px">
+      <b>${p.source}</b>
+      •
+      <b>${formatMW(p.capacity)}</b>
+    </div>
+    <div style="margin-top:4px;color:#8ea2b4">
+      Radius transparan di sekitar titik merepresentasikan kapasitas terpasang
+    </div>
+  `;
+}
+
+function selectPlant(p){
+
+  document
+    .getElementById("plantName")
+    .textContent =
+      p.name;
+
+  document
+    .getElementById("plantLocation")
+    .textContent =
+      p.location;
+
+  document
+    .getElementById("plantType")
+    .textContent =
+      p.source;
+
+  document
+    .getElementById("plantTypeDot")
+    .style.background =
+      colors[p.sourceKey];
+
+  document
+    .getElementById("capacity")
+    .textContent =
+      formatMW(
+        p.capacity
+      );
+
+
+  if(
+    p.production != null
+  ){
+
+    document
+      .getElementById("production")
+      .textContent =
+        formatGWh(
+          p.production
+        );
+
+    document
+      .getElementById("productionYear")
+      .textContent =
+        p.productionYear;
+
+  }else{
+
+    document
+      .getElementById("production")
+      .textContent =
+        "N/A";
+
+    document
+      .getElementById("productionYear")
+      .textContent =
+        "tidak tersedia";
+  }
+
+
+  const cf =
+    capacityFactor(p);
+
+
+  document
+    .getElementById("utilization")
+    .textContent =
+      cf == null
+        ? "N/A"
+        : cf
+            .toFixed(1)
+            .replace(".",",")
+          + "%";
+
+
+  document
+    .getElementById("operator")
+    .textContent =
+      p.operator;
+
+
+  document
+    .getElementById("network")
+    .textContent =
+      p.network;
+
+
+  document
+    .getElementById("plantNote")
+    .textContent =
+      p.note || "";
+
+  highlightServiceAreas(p);
+}
+
+function renderMarkers(){
+
+  capacityHaloLayer.clearLayers();
+  markerLayer.clearLayers();
+  markerMap.clear();
+
+  let visibleCount = 0;
+
+  plants.forEach(p => {
+
+    if(!activeKeys.has(p.sourceKey)){
+      return;
+    }
+
+    visibleCount++;
+
+    const color = colors[p.sourceKey];
+    const haloRadius = haloRadiusFromCapacity(p.capacity);
+
+    /*
+      Lingkaran transparan kapasitas.
+      Radius memakai pixel, bukan meter geografis, karena ini encoding data,
+      BUKAN radius jangkauan listrik sebenarnya.
+    */
+    const halo = L.circleMarker(
+      [p.lat,p.lng],
+      {
+        pane:"capacityHalos",
+        radius:haloRadius,
+        color:color,
+        weight:2,
+        opacity:0.82,
+        fillColor:color,
+        fillOpacity:0.13,
+        className:"capacity-halo"
+      }
+    )
+    .bindTooltip(
+      `${p.name}<br><b>${formatMW(p.capacity)}</b>`,
+      {
+        sticky:true,
+        direction:"top"
+      }
+    )
+    .addTo(capacityHaloLayer);
+
+    halo.on("click", () => {
+      selectPlant(p);
+      const marker = markerMap.get(p.id);
+      if(marker){
+        marker.openPopup();
+      }
+    });
+
+    const marker =
+      L.marker(
+        [p.lat,p.lng],
+        {
+          icon:iconFor(p),
+          zIndexOffset:500
+        }
+      )
+      .bindPopup(
+        popupHTML(p)
+      )
+      .addTo(
+        markerLayer
+      );
+
+    marker.on(
+      "click",
+      () => {
+        selectPlant(p);
+      }
+    );
+
+    markerMap.set(
+      p.id,
+      marker
+    );
+  });
+
+  document
+    .getElementById("plantCount")
+    .textContent =
+      visibleCount;
+}
+
+/* =========================================================
+   FILTER
+========================================================= */
+
+const filterConfig = [
+  ["coal","Batubara"],
+  ["gas","Gas"],
+  ["hydro","Air"]
+];
+
+const filterContainer =
+  document.getElementById(
+    "filters"
+  );
+
+filterConfig.forEach(
+  ([key,label]) => {
+
+    const button =
+      document.createElement(
+        "button"
+      );
+
+    button.type =
+      "button";
+
+    button.className =
+      "filter-btn active";
+
+    button.textContent =
+      label;
+
+    button.style.borderColor =
+      colors[key] + "88";
+
+
+    button.addEventListener(
+      "click",
+      () => {
+
+        if(
+          activeKeys.has(key)
+        ){
+
+          activeKeys.delete(key);
+
+          button.classList.remove(
+            "active"
+          );
+
+        }else{
+
+          activeKeys.add(key);
+
+          button.classList.add(
+            "active"
+          );
+
+        }
+
+        renderMarkers();
+      }
+    );
+
+
+    filterContainer
+      .appendChild(
+        button
+      );
+  }
+);
+
+/* =========================================================
+   RESERVE MONITOR
+========================================================= */
+
+const available =
+  document.getElementById(
+    "available"
+  );
+
+const load =
+  document.getElementById(
+    "load"
+  );
+
+const availableLabel =
+  document.getElementById(
+    "availableLabel"
+  );
+
+const loadLabel =
+  document.getElementById(
+    "loadLabel"
+  );
+
+const statusPill =
+  document.getElementById(
+    "statusPill"
+  );
+
+const reserveText =
+  document.getElementById(
+    "reserveText"
+  );
+
+const reserveBar =
+  document.getElementById(
+    "reserveBar"
+  );
+
+
+function statusFor(
+  margin
+){
+
+  if(
+    margin < 0
+  ){
+
+    return {
+      label:"DEFISIT",
+      color:"#d83f7d"
+    };
+  }
+
+
+  if(
+    margin < 10
+  ){
+
+    return {
+      label:"BAHAYA",
+      color:"#ef5a5a"
+    };
+  }
+
+
+  if(
+    margin < 20
+  ){
+
+    return {
+      label:"WASPADA",
+      color:"#f0b13c"
+    };
+  }
+
+
+  return {
+    label:"NORMAL",
+    color:"#24b7a5"
+  };
+}
+
+
+function updateMonitor(){
+
+  const a =
+    parseFloat(
+      available.value
+    );
+
+  const l =
+    parseFloat(
+      load.value
+    );
+
+
+  const margin =
+    (
+      (
+        a - l
+      )
+      /
+      l
+    )
+    *
+    100;
+
+
+  const status =
+    statusFor(
+      margin
+    );
+
+
+  availableLabel.textContent =
+    a
+      .toFixed(1)
+      .replace(".",",")
+    +
+    " GW";
+
+
+  loadLabel.textContent =
+    l
+      .toFixed(1)
+      .replace(".",",")
+    +
+    " GW";
+
+
+  reserveText.textContent =
+    margin
+      .toFixed(1)
+      .replace(".",",")
+    +
+    "%";
+
+
+  statusPill.textContent =
+    status.label;
+
+
+  statusPill.style.background =
+    status.color + "22";
+
+
+  statusPill.style.color =
+    status.color;
+
+
+  statusPill.style.border =
+    "1px solid "
+    +
+    status.color
+    +
+    "77";
+
+
+  const width =
+    Math.max(
+      0,
+      Math.min(
+        100,
+        margin
+      )
+    );
+
+
+  reserveBar.style.width =
+    width + "%";
+
+
+  reserveBar.style.background =
+    status.color;
+}
+
+
+available.addEventListener(
+  "input",
+  updateMonitor
+);
+
+load.addEventListener(
+  "input",
+  updateMonitor
+);
+
+
+/* =========================================================
+   INITIAL
+========================================================= */
+
+renderMarkers();
+
+/* Preload batas kabupaten agar highlight pertama lebih cepat */
+ensureRegencyData();
+
+selectPlant(
+  plants[0]
+);
+
+updateMonitor();
+
+</script>
+</body>
+</html>
